@@ -42,41 +42,85 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.AsyncTask;
 
+
+
+//Данный класс отвечает за основную логику приложения, связанную с отображением и запуском сервера
+//для видеопотока и его остановки, а также управлением камерой и ее предварительным просмотром.
+//Он также устанавливает обработчик кликов на кнопки "Start" и "Stop" и отображает адрес для доступа
+//к серверу в TextView.
 public class MainActivity extends Activity {
+    
+    //Это статическое поле со значением "MainActivity", которое используется для тегирования сообщений логирования.
     private static final String TAG = "MainActivity";
+    
+    //Это поле объекта типа VideoServer, который представляет видео-сервер.
     private VideoServer mServer;
+    
+    //Это поле объекта типа Camera, который представляет камеру устройства.
     private Camera mCamera;
+    
+    //Это поле объекта типа CameraPreview, который представляет превью камеры на экране устройства.
     private CameraPreview mPreview;
+    
+    //Это поля объектов типа Button, которые представляют кнопки для запуска и остановки видео-сервера.
     private Button mStartButton, mStopButton;
+    
+    //Это поле объекта типа TextView, который представляет текстовое поле для отображения адреса сервера.
     private TextView mAddressTextView;
+    
+    //Это поле объекта типа FrameLayout, который представляет контейнер для превью камеры.
     private FrameLayout mPreviewLayout;
+    
+    //Это поле объекта типа Handler, который используется для работы с потоками и выполнения операций в основном потоке (UI-потоке).
     private Handler mHandler = new Handler(Looper.getMainLooper());
+    
     @Override
+    
+    //объявление метода onCreate, который является основным методом активности и будет вызываться при ее создании.
+    //Метод принимает объект класса Bundle в качестве аргумента.
     protected void onCreate(Bundle savedInstanceState) {
+        
+        //вызов метода onCreate родительского класса.
         super.onCreate(savedInstanceState);
+        
+        //установка макета UI для данной активности.
         setContentView(R.layout.activity_main);
-        // Keep the screen on while the app is running
+        
+        //установка флага, который указывает на то, что экран должен быть включен, пока приложение работает.
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        // Get UI elements
+        
+        //поиск кнопки "Старт" в макете UI и ее связывание с переменной mStartButton.
         mStartButton = findViewById(R.id.start_button);
+        
+        //поиск кнопки "Стоп" в макете UI и ее связывание с переменной mStopButton.
         mStopButton = findViewById(R.id.stop_button);
+        
+        //поиск текстового поля в макете UI и его связывание с переменной mAddressTextView.
         mAddressTextView = findViewById(R.id.address_text_view);
+        
+        //поиск макета для отображения видеопотока в макете UI и его связывание с переменной mPreviewLayout.
         mPreviewLayout = findViewById(R.id.preview_layout);
-        // Set up start button click listener
+        
+        //установка слушателя кликов на кнопку "Старт".
         mStartButton.setOnClickListener(new View.OnClickListener() {
             @Override
+            
+            //вызов метода startServer() при нажатии на кнопку "Старт".
             public void onClick(View v) {
                 startServer();
             }
         });
-        // Set up stop button click listener
+        
+        //устанавливает слушателя OnClickListener на кнопку, где при нажатии будет вызвана функция "stopServer()".
         mStopButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 stopServer();
             }
         });
-        // Get camera instance
+        
+        //пытается получить доступ к камере через метод "Camera.open()". Если это не удалось, то будет выведено сообщение об ошибке,
+        //записанное в объекте типа "Log" и вызван метод "showError()" для отображения сообщения об ошибке на экране.
         try {
             mCamera = Camera.open();
         } catch (Exception e) {
@@ -84,19 +128,23 @@ public class MainActivity extends Activity {
             showError("Failed to open camera");
             return;
         }
-        // Set up camera preview
+        
+        //создает экземпляр класса "CameraPreview" и присваивает его переменной "mPreview". 
+        //Этот класс используется для предварительного просмотра камеры.
         mPreview = new CameraPreview(this, mCamera);
+        
+        //добавляет предварительный просмотр камеры на макет экрана приложения.
         mPreviewLayout.addView(mPreview);
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        // Release camera when the activity is destroyed
+        // Освобождаем камеру, когда активность уничтожается
         releaseCamera();
     }
     private void startServer() {
-        // Start server on port 8080
+        // Запускаем сервер на порту 8080
         mServer = new VideoServer(8080);
         try {
             mServer.start();
@@ -105,7 +153,7 @@ public class MainActivity extends Activity {
             showError("Failed to start server");
             return;
         }
-        // Show server address on the UI
+        // Показать адрес сервера в пользовательском интерфейсе
         String ipAddress = getLocalIpAddress();
         if (ipAddress == null) {
             Log.e(TAG, "Failed to get local IP address");
@@ -113,38 +161,39 @@ public class MainActivity extends Activity {
             return;
         }
         mAddressTextView.setText("http://" + ipAddress + ":8080");
-        // Disable start button and enable stop button
+        
+        // Отключить кнопку запуска и включить кнопку остановки
         mStartButton.setEnabled(false);
         mStopButton.setEnabled(true);
-        // Set up preview callback to send frames to server
+        // Настраиваем обратный вызов предварительного просмотра для отправки кадров на сервер
         mCamera.setPreviewCallback(new PreviewCallback() {
             @Override
             public void onPreviewFrame(byte[] data, Camera camera) {
-                // Convert image data to JPEG
+                // Преобразование данных изображения в JPEG
                 Size size = camera.getParameters().getPreviewSize();
                 YuvImage image = new YuvImage(data, ImageFormat.NV21, size.width, size.height, null);
                 ByteArrayOutputStream out = new ByteArrayOutputStream();
                 image.compressToJpeg(new Rect(0, 0, size.width, size.height), 50, out);
                 byte[] jpegData = out.toByteArray();
-                // Send JPEG data to server
+                // Отправляем данные JPEG на сервер
                 StreamVideoTask task = new StreamVideoTask();
                 task.execute(jpegData);
             }
         });
     }
     private void stopServer() {
-        // Stop server
+        // Остановка сервера
         if (mServer != null) {
             mServer.stop();
             mServer = null;
         }
-        // Reset UI
+        // сбрасиваем UI
         mStartButton.setEnabled(true);
         mStopButton.setEnabled(false);
         mAddressTextView.setText("");
     }
     private void releaseCamera() {
-        // Release camera if it's not null
+        // Освобождаем камеру, если она не нулевая
         if (mCamera != null) {
             mPreviewLayout.removeView(mPreview);
             mCamera.setPreviewCallback(null);
@@ -155,16 +204,16 @@ public class MainActivity extends Activity {
     }
     private String getLocalIpAddress() {
         try {
-            // Get all network interfaces
+            // Получить все сетевые интерфейсы
             Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
-            // Loop through interfaces
+            // Цикл по интерфейсу
             while (interfaces.hasMoreElements()) {
                 NetworkInterface iface = interfaces.nextElement();
-                // Loop through addresses for each interface
+                // Перебираем адреса для каждого интерфейса
                 Enumeration<InetAddress> addresses = iface.getInetAddresses();
                 while (addresses.hasMoreElements()) {
                     InetAddress addr = addresses.nextElement();
-                    // Check if the address is not a loopback address and it's an IPv4 address
+                    // Проверьте, не является ли адрес петлевым адресом и адресом IPv4.
                     if (!addr.isLoopbackAddress() && addr.getAddress().length == 4) {
                         return addr.getHostAddress();
                     }
@@ -179,7 +228,7 @@ public class MainActivity extends Activity {
         mHandler.post(new Runnable() {
             @Override
             public void run() {
-                // Show error message as toast
+                // Показать сообщение об ошибке в качестве всплывающего окна 
                 Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show();
             }
         });
@@ -187,9 +236,9 @@ public class MainActivity extends Activity {
     private class StreamVideoTask extends AsyncTask<byte[], Void, Void> {
         @Override
         protected Void doInBackground(byte[]... params) {
-            // Get JPEG data
+            // Получить данные JPEG
             byte[] jpegData = params[0];
-            // Send data to server
+            // Отправить данные на сервер
             mServer.send(jpegData);
             return null;
         }
@@ -215,7 +264,10 @@ public class MainActivity extends Activity {
         }
         @Override
         public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-            // Nothing to do here
+            // В этом методе можно добавить свою собственную логику для обработки любых 
+            //изменений свойств или атрибутов поверхности, таких как настройка размера
+            //или ориентации вашего пользовательского интерфейса или обновление данных, отображаемых на поверхности.
+            // но это пока не надо
         }
         @Override
         public void surfaceDestroyed(SurfaceHolder holder) {
